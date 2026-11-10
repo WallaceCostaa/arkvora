@@ -771,9 +771,9 @@
     $(".pj-num").textContent = `${p.id} / ${String(S.projetos.length).padStart(2, "0")} — ${p.tipo}`;
     $(".pj-titulo").textContent = nomeDe(p);
     $(".ficha").innerHTML =
-      `<dt>Project</dt><dd>${nomeDe(p)}</dd>` +
-      (p.arquitetura ? `<dt>Architecture</dt><dd>${p.arquitetura}</dd>` : "") +
-      `<dt>Visualization</dt><dd>Arkvora Visual</dd>`;
+      `<dt>${t("Project", "Projeto")}</dt><dd>${nomeDe(p)}</dd>` +
+      (p.arquitetura ? `<dt>${t("Architecture", "Arquitetura")}</dt><dd>${p.arquitetura}</dd>` : "") +
+      `<dt>${t("Visualization", "Visualização")}</dt><dd>Arkvora Visual</dd>`;
     $(".pj-contador").textContent = `${p.imagens} ${t("images", "imagens")}`;
     if (galeria.dataset.id !== p.id) {
       galeria.dataset.id = p.id;
