@@ -13,8 +13,10 @@
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 
   /* ── Idioma, relógio e links ────────────────────────────────────────── */
-  let lang = "en";
-  try { lang = localStorage.getItem("arkvora-lang") || (new URLSearchParams(location.search).get("lang") === "pt" ? "pt" : "en"); } catch (e) {}
+  // português é o padrão; ?lang=en abre em inglês. Chave nova para quem já tinha "en" salvo pelo padrão antigo.
+  let lang = "pt";
+  try { lang = new URLSearchParams(location.search).get("lang") || localStorage.getItem("arkvora-idioma") || "pt"; } catch (e) {}
+  lang = lang === "en" ? "en" : "pt";
   const t = (en, pt) => (lang === "pt" ? pt : en);
   const nomeDe = (p) => (p.nome[lang] || p.nome.en);
   const nomeTake = (p) => (p.take.nome ? p.take.nome[lang] || p.take.nome.en : "Film");
@@ -24,7 +26,7 @@
     document.documentElement.dataset.lang = lang;
     document.documentElement.lang = lang === "pt" ? "pt-BR" : "en";
     $$("[data-set-lang]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.setLang === lang)));
-    try { localStorage.setItem("arkvora-lang", lang); } catch (e) {}
+    try { localStorage.setItem("arkvora-idioma", lang); } catch (e) {}
     const num = String(S.whatsapp?.numero || "").replace(/\D/g, "");
     const m = S.whatsapp?.mensagem || "";
     const txt = typeof m === "string" ? m : m[lang] || m.en;
@@ -139,12 +141,15 @@
     pecas.forEach((p, i) => {
       const lado = i % 2;
       if (celular) {
-        p.w = vw * (0.68 + p.r * 0.12);
+        // mesma composição do desktop: ARKVORA fixo no meio, fotos alternando esquerda/direita
+        const faixaMin = lado ? 0.53 : 0.03, faixaMax = lado ? 0.97 : 0.47, faixa = (faixaMax - faixaMin) * vw;
+        p.w = vw * (p.ar > 1.3 ? 0.42 + p.r * 0.02 : 0.34 + p.r * 0.06);
         p.h = p.w / p.ar;
-        if (p.h > vh * 0.58) { p.h = vh * 0.58; p.w = p.h * p.ar; }
-        p.x = lado ? vw * 0.96 - p.w : vw * 0.04;
-        // a 1ª peça começa logo abaixo da janela da marca (centro da tela na abertura)
-        p.y0 = i ? Math.max(fimLado[0], fimLado[1]) + vh * 0.07 : vh * 0.5 + janelaMarca / 2;
+        if (p.h > vh * 0.36) { p.h = vh * 0.36; p.w = p.h * p.ar; }
+        if (p.w > faixa) { p.w = faixa; p.h = p.w / p.ar; }
+        const folga = faixa - p.w;
+        p.x = faixaMin * vw + folga * (lado ? 0.2 + p.r * 0.8 : p.r * 0.8);
+        p.y0 = i ? Math.max(topoAnterior + vh * 0.15, fimLado[lado] + vh * 0.05) : vh * 0.14;
       } else {
         const faixaMin = lado ? 0.625 : 0.035, faixaMax = lado ? 0.965 : 0.375, faixa = (faixaMax - faixaMin) * vw;
         p.w = vw * (p.ar > 1.3 ? 0.31 + p.r * 0.03 : 0.22 + p.r * 0.07);
@@ -166,8 +171,7 @@
     // No celular as fotos ocupam quase toda a largura, então não há faixa central livre.
     // A marca vira uma "janela" na sequência: rola junto com as peças e volta a cada ciclo,
     // sempre com espaço vazio em volta. O fim do ciclo deixa um respiro antes da próxima janela.
-    if (celular) H = Math.max(fundo + vh * 0.07 - vh * 0.5 + janelaMarca / 2, vh * 2.4);
-    marcaRola = celular;
+    marcaRola = false; // a marca fica fixa no centro também no celular
   }
   distribuir();
   addEventListener("resize", distribuir);
@@ -456,7 +460,7 @@
      profundidade, flutuam e abrem espaço em volta do cursor; ao sair, voltam
      a formar a imagem. Um único canvas é movido para dentro da peça. */
   const distorcao = (() => {
-    if (reduzir || toque) return null;
+    if (reduzir) return null;
     const c = document.createElement("canvas");
     c.className = "gl"; c.setAttribute("aria-hidden", "true");
     const gl = c.getContext("webgl", { alpha: true, premultipliedAlpha: false, antialias: false });
@@ -601,7 +605,18 @@
       if (distorcao) { distorcao.entrar(p); distorcao.mover(p, e.clientX, e.clientY); }
       else pixelar(p);
     });
-    p.el.addEventListener("pointermove", (e) => distorcao && distorcao.mover(p, e.clientX, e.clientY));
+    // celular: encostar o dedo na foto vira nuvem de pontos em volta do dedo; soltar, ela se refaz
+    if (toque) {
+      p.el.addEventListener("pointerdown", (e) => {
+        if (!distorcao) return;
+        try { p.el.releasePointerCapture(e.pointerId); } catch (_) {}
+        distorcao.entrar(p); distorcao.mover(p, e.clientX, e.clientY);
+        const mov = (ev) => distorcao.mover(p, ev.clientX, ev.clientY);
+        const fim = () => { distorcao.sair(p); removeEventListener("pointermove", mov); removeEventListener("pointerup", fim); removeEventListener("pointercancel", fim); };
+        addEventListener("pointermove", mov); addEventListener("pointerup", fim); addEventListener("pointercancel", fim);
+      });
+    }
+    p.el.addEventListener("pointermove", (e) => !toque && distorcao && distorcao.mover(p, e.clientX, e.clientY));
     p.el.addEventListener("pointerleave", () => {
       p.el.classList.remove("ativa"); mesa.classList.remove("focando"); cursor.classList.remove("sobre");
       rotulo.classList.remove("visivel");
